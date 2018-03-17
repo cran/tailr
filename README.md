@@ -3,12 +3,13 @@
 
 # tailr – Tail recursion optimisations for R programming
 
+[![Licence](https://img.shields.io/badge/licence-GPL--3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![lifecycle](https://img.shields.io/badge/lifecycle-maturing-blue.svg)](https://www.tidyverse.org/lifecycle/#maturing)
 [![Project Status: Active – The project has reached a stable, usable
 state and is being actively
 developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Last-changedate](https://img.shields.io/badge/last%20change-2018--02--28-orange.svg)](/commits/master)
-[![lifecycle](http://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#experimental)
-[![Licence](https://img.shields.io/badge/licence-GPL--3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
+[![Last-changedate](https://img.shields.io/badge/last%20change-2018--03--17-green.svg)](/commits/master)
+[![packageversion](https://img.shields.io/badge/Package%20version-0.1.1-green.svg?style=flat-square)](commits/master)
 
 [![Travis build
 status](https://travis-ci.org/mailund/tailr.svg?branch=master)](https://travis-ci.org/mailund/tailr)
@@ -19,10 +20,12 @@ status](https://codecov.io/gh/mailund/tailr/branch/master/graph/badge.svg)](http
 [![Coverage
 status](http://coveralls.io/repos/github/mailund/tailr/badge.svg?branch=master)](https://coveralls.io/github/mailund/tailr?branch=master)
 
+[![CRAN
+status](http://www.r-pkg.org/badges/version/tailr)](https://cran.r-project.org/package=tailr)
+[![CRAN
+downloads](http://cranlogs.r-pkg.org/badges/grand-total/tailr)](https://cran.r-project.org/package=tailr)
 [![minimal R
-version](https://img.shields.io/badge/R%3E%3D-3.1-blue.svg)](https://cran.r-project.org/)
-[![packageversion](https://img.shields.io/badge/Package%20version-0.1.0-green.svg?style=flat-square)](commits/master)
-[![CRAN\_Status\_Badge](http://www.r-pkg.org/badges/version/tailr)](https://cran.r-project.org/package=tailr)
+version](https://img.shields.io/badge/R-%E2%89%A53.2-blue.svg)](https://cran.r-project.org/)
 
 -----
 
@@ -41,6 +44,12 @@ The goal of `tailr` is to automatically transform tail-recursive
 functions into loops or trampolines.
 
 ## Installation
+
+You can install the released version of `tailr` from CRAN using
+
+``` r
+install.packages("tailr")
+```
 
 You can install tailr from GitHub with:
 
@@ -64,7 +73,7 @@ factorial <- function(n, acc = 1) {
 We can then, automatically, translate that into a looping version:
 
 ``` r
-tr_factorial <- tailr::loop_transform(factorial)
+tr_factorial <- tailr::loop_transform(factorial, byte_compile = FALSE)
 tr_factorial
 #> function (n, acc = 1) 
 #> {
@@ -88,7 +97,12 @@ tr_factorial(100)
 #> [1] 9.332622e+157
 ```
 
-We can then compare the running time with the recursive function and a
+I have disabled byte compilation to make running time comparisons fair;
+by default it is enabled. For a function as simple as `factorial`,
+though, byte compiling will not affect the running time in any
+substantial amount.
+
+We can compare the running time with the recursive function and a
 version that is written using a loop:
 
 ``` r
@@ -108,14 +122,14 @@ bm <- microbenchmark::microbenchmark(factorial(n),
                                      tr_factorial(n))
 bm
 #> Unit: microseconds
-#>               expr      min        lq      mean   median       uq      max
-#>       factorial(n) 1060.171 1549.4740 1913.4090 1713.880 1944.354 8509.096
-#>  loop_factorial(n)   58.790   84.8125  146.6675  102.599  106.656 5168.802
-#>    tr_factorial(n)  188.604  273.1550  418.8421  388.853  446.079 2951.480
-#>  neval
-#>    100
-#>    100
-#>    100
+#>               expr      min        lq      mean    median        uq
+#>       factorial(n) 1238.332 1574.1585 1864.1002 1676.3815 1833.4360
+#>  loop_factorial(n)   57.964   87.7235  142.9240  101.9705  108.7195
+#>    tr_factorial(n)  181.331  370.4770  408.5664  402.9685  437.2025
+#>       max neval
+#>  7723.191   100
+#>  4388.476   100
+#>  1816.852   100
 boxplot(bm)
 ```
 
@@ -226,6 +240,7 @@ tr_llength
 #>         }
 #>     })
 #> }
+#> <bytecode: 0x7fddfe174190>
 ```
 
 but, then, it is not one we want to manually inspect in any case.
@@ -247,14 +262,14 @@ bm <- microbenchmark::microbenchmark(llength(test_llist),
                                      tr_llength(test_llist))
 bm
 #> Unit: milliseconds
-#>                      expr      min       lq     mean   median        uq
-#>       llength(test_llist) 68.07866 76.34487 89.97757 81.73584  89.41849
-#>  loop_llength(test_llist) 73.21940 81.79118 98.12486 89.10334 102.31499
-#>    tr_llength(test_llist) 43.32049 49.75380 57.50893 54.22610  59.83531
-#>       max neval
-#>  331.3670   100
-#>  267.8227   100
-#>  200.1066   100
+#>                      expr      min       lq     mean   median       uq
+#>       llength(test_llist) 52.15034 62.94309 67.27350 65.32222 68.77446
+#>  loop_llength(test_llist) 54.48512 66.55713 70.13767 70.21095 74.21975
+#>    tr_llength(test_llist) 33.69783 41.62228 44.88733 45.06710 47.30268
+#>        max neval
+#>  118.54083   100
+#>   84.72679   100
+#>   58.92155   100
 boxplot(bm)
 ```
 

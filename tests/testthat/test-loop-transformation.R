@@ -144,3 +144,61 @@ test_that("we warn about eval expressions, but leave them alone", {
     # I'm not sure how to easilly check that eval-expressions are
     # left alone, though...
 })
+
+test_that("we handle local varibles when they are functions", {
+    if (!requireNamespace("pmatch", quietly = TRUE)) {
+        skip("pmatch not installed so we cannot run this test")
+        return()
+    }
+    library(pmatch)
+
+    llist := NIL | CONS(car, cdr:llist)
+
+    llrev <- function(llist, acc = NIL) {
+        pmatch::cases(
+            llist,
+            NIL -> acc,
+            CONS(car, cdr) -> llrev(cdr, CONS(car, acc))
+        )
+    }
+    llrev <- tailr::loop_transform(llrev)
+
+    llmap <- function(llist, f, acc = NIL) {
+        pmatch::cases(
+            llist,
+            NIL -> llrev(acc),
+            CONS(car, cdr) -> llmap(cdr, f, CONS(f(car), acc))
+        )
+    }
+    expect_true(can_loop_transform(llmap))
+
+    llmap <- loop_transform(llmap)
+
+    ll <- CONS(1, CONS(2, CONS(3, NIL)))
+    ll2 <- llmap(ll, function(x) 2*x)
+
+    llength <- function(llist, acc = 0) {
+        pmatch::cases(
+            llist,
+            NIL -> acc,
+            CONS(car, cdr) -> llength(cdr, acc + 1)
+        )
+    }
+    llength <- loop_transform(llength)
+    as.list.llist <- function(x, all.names = FALSE, sorted = FALSE, ...) {
+        n <- llength(x)
+        v <- vector("list", length = n)
+        i <- 1
+        while (i <= n) {
+            v[i] <- x$car
+            i <- i + 1
+            x <- x$cdr
+        }
+        v
+    }
+    as.vector.llist <- function(x, mode = "any") {
+        unlist(as.list(x))
+    }
+
+    expect_equal(as.vector.llist(ll2), c(2, 4, 6))
+})

@@ -19,8 +19,39 @@ test_that("we transform functions with user-defined re-writing rules", {
     attr(my_if_else, "tailr_transform") <- my_if_else_transform
 
     f <- function(x, y) my_if_else(x == y, x, f(y, y))
-    transformed_body <- user_transform(body(f))
+    transformed_body <- user_transform(body(f), f)
     expect_equal(transformed_body, quote(if (x == y) x else f(y, y)))
+})
+
+test_that("we can use user-defined re-writing rules from another package", {
+    if (!requireNamespace("pmatch", quietly = TRUE)) {
+        skip("These tests require the pmatch package to be installed")
+        return()
+    }
+
+    pmatch::`:=`(llists, NIL | CONS(car, cdr:llists))
+
+    llength <- function(llist, acc = 0) {
+        pmatch::cases(
+            llist,
+            NIL -> acc,
+            CONS(car, cdr) -> llength(cdr, acc + 1)
+        )
+    }
+    llength <- tailr::loop_transform(llength)
+
+    make_llist <- function(n) {
+        llist <- NIL
+        while (n > 0) {
+            llist <- CONS(n, llist)
+            n <- n - 1
+        }
+        llist
+    }
+
+    for (n in 0:5) {
+        expect_equal(n, llength(make_llist(n)))
+    }
 })
 
 test_that("we handle errors", {
@@ -32,7 +63,7 @@ test_that("we handle errors", {
     )
 
     expect_error(
-        user_transform(body(f)),
+        user_transform(body(f), f),
         regexp = "The function g was not found in the provided scope."
     )
 })
