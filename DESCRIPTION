@@ -1,5 +1,5 @@
 Package: tailr
-Version: 0.1.1
+Version: 0.1.2
 Title: Automatic Tail Recursion Optimisation
 Description: Implements meta-programming functions for automatically
     translating recursive functions into looping functions or trampolines.
@@ -16,8 +16,8 @@ RoxygenNote: 6.0.1
 URL: https://github.com/mailund/tailr
 BugReports: https://github.com/mailund/tailr/issues
 NeedsCompilation: no
-Packaged: 2018-03-17 10:06:59 UTC; mailund
+Packaged: 2018-04-27 07:45:23 UTC; mailund
 Author: Thomas Mailund [aut, cre]
 Maintainer: Thomas Mailund <mailund@birc.au.dk>
 Repository: CRAN
-Date/Publication: 2018-03-17 10:14:14 UTC
+Date/Publication: 2018-04-27 07:54:53 UTC

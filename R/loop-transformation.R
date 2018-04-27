@@ -498,15 +498,19 @@ build_transformed_function <- function(fun_expr, info) {
     fun_expr <- returns_to_escapes(fun_expr, info)
     fun_expr <- simplify_nested_blocks(fun_expr)
 
-    rlang::expr({
-        !!! tmp_assignments
+    repeat_body <- as.call(
+        c(`{`, locals_assignments, fun_expr, quote(next))
+    )
+    call_cc_stmt <- rlang::expr(
         callCC(function(escape) {
             repeat {
-                !!! locals_assignments
-                !! fun_expr
+                !!repeat_body
             }
         })
-    })
+    )
+    as.call(
+        c(`{`, tmp_assignments, call_cc_stmt)
+    )
 }
 
 #' Transform a function from recursive to looping.
@@ -528,6 +532,7 @@ loop_transform <- function(fun, byte_compile = TRUE) {
     fun_env <- rlang::get_env(fun_q)
     fun_body <- user_transform(body(fun), fun, fun_env)
 
+
     if (!can_loop_transform_body(fun_name, fun_body, fun, fun_env)) {
         warning("Could not build a transformed function")
         return(fun)
@@ -540,7 +545,6 @@ loop_transform <- function(fun, byte_compile = TRUE) {
         body = new_fun_body,
         env = rlang::get_env(fun_q)
     )
-
     if (byte_compile) {
         if (!requireNamespace("compiler")) { # nocov start
             msg <- simpleWarning(
@@ -556,6 +560,7 @@ loop_transform <- function(fun, byte_compile = TRUE) {
         } # nocov end
         result <- compiler::cmpfun(result)
     }
+    attr(result, "srcref") <- attr(fun, "srcref")
 
     result
 }

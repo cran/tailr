@@ -8,8 +8,8 @@
 [![Project Status: Active – The project has reached a stable, usable
 state and is being actively
 developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Last-changedate](https://img.shields.io/badge/last%20change-2018--03--17-green.svg)](/commits/master)
-[![packageversion](https://img.shields.io/badge/Package%20version-0.1.1-green.svg?style=flat-square)](commits/master)
+[![Last-changedate](https://img.shields.io/badge/last%20change-2018--03--20-green.svg)](/commits/master)
+[![packageversion](https://img.shields.io/badge/Package%20version-0.1.1.9002-green.svg?style=flat-square)](commits/master)
 
 [![Travis build
 status](https://travis-ci.org/mailund/tailr.svg?branch=master)](https://travis-ci.org/mailund/tailr)
@@ -75,22 +75,9 @@ We can then, automatically, translate that into a looping version:
 ``` r
 tr_factorial <- tailr::loop_transform(factorial, byte_compile = FALSE)
 tr_factorial
-#> function (n, acc = 1) 
-#> {
-#>     .tailr_n <- n
-#>     .tailr_acc <- acc
-#>     callCC(function(escape) {
-#>         repeat {
-#>             n <- .tailr_n
-#>             acc <- .tailr_acc
-#>             if (n <= 1) 
-#>                 escape(acc)
-#>             else {
-#>                 .tailr_n <<- n - 1
-#>                 .tailr_acc <<- acc * n
-#>             }
-#>         }
-#>     })
+#> function(n, acc = 1) {
+#>     if (n <= 1) acc
+#>     else factorial(n - 1, acc * n)
 #> }
 
 tr_factorial(100)
@@ -122,14 +109,14 @@ bm <- microbenchmark::microbenchmark(factorial(n),
                                      tr_factorial(n))
 bm
 #> Unit: microseconds
-#>               expr      min        lq      mean    median        uq
-#>       factorial(n) 1238.332 1574.1585 1864.1002 1676.3815 1833.4360
-#>  loop_factorial(n)   57.964   87.7235  142.9240  101.9705  108.7195
-#>    tr_factorial(n)  181.331  370.4770  408.5664  402.9685  437.2025
-#>       max neval
-#>  7723.191   100
-#>  4388.476   100
-#>  1816.852   100
+#>               expr     min       lq      mean   median       uq      max
+#>       factorial(n) 715.304 772.4265 1035.9802 863.2585 1179.665 6816.073
+#>  loop_factorial(n)  51.310  51.8860   96.7987  53.6600   60.598 3491.843
+#>    tr_factorial(n) 791.451 821.8215 1100.5864 907.5140 1166.180 2606.855
+#>  neval
+#>    100
+#>    100
+#>    100
 boxplot(bm)
 ```
 
@@ -220,27 +207,12 @@ The function we generate is rather complicated
 
 ``` r
 tr_llength
-#> function (llist, acc = 0) 
-#> {
-#>     .tailr_llist <- llist
-#>     .tailr_acc <- acc
-#>     callCC(function(escape) {
-#>         repeat {
-#>             llist <- .tailr_llist
-#>             acc <- .tailr_acc
-#>             if (!rlang::is_null(..match_env <- pmatch::test_pattern(llist, 
-#>                 NIL))) 
-#>                 with(..match_env, escape(acc))
-#>             else if (!rlang::is_null(..match_env <- pmatch::test_pattern(llist, 
-#>                 CONS(car, cdr)))) 
-#>                 with(..match_env, {
-#>                   .tailr_llist <<- cdr
-#>                   .tailr_acc <<- acc + 1
-#>                 })
-#>         }
-#>     })
+#> function(llist, acc = 0) {
+#>     cases(llist,
+#>           NIL -> acc,
+#>           CONS(car, cdr) -> llength(cdr, acc + 1))
 #> }
-#> <bytecode: 0x7fddfe174190>
+#> <bytecode: 0x7fac8a3e9238>
 ```
 
 but, then, it is not one we want to manually inspect in any case.
@@ -263,13 +235,13 @@ bm <- microbenchmark::microbenchmark(llength(test_llist),
 bm
 #> Unit: milliseconds
 #>                      expr      min       lq     mean   median       uq
-#>       llength(test_llist) 52.15034 62.94309 67.27350 65.32222 68.77446
-#>  loop_llength(test_llist) 54.48512 66.55713 70.13767 70.21095 74.21975
-#>    tr_llength(test_llist) 33.69783 41.62228 44.88733 45.06710 47.30268
+#>       llength(test_llist) 54.94337 65.40173 68.42609 67.61124 71.20118
+#>  loop_llength(test_llist) 59.18011 70.31971 75.76034 74.02095 78.67105
+#>    tr_llength(test_llist) 35.13879 43.11308 45.63485 45.09175 48.55855
 #>        max neval
-#>  118.54083   100
-#>   84.72679   100
-#>   58.92155   100
+#>   99.00812   100
+#>  134.51344   100
+#>   60.88526   100
 boxplot(bm)
 ```
 
