@@ -8,9 +8,8 @@
 [![Project Status: Active – The project has reached a stable, usable
 state and is being actively
 developed.](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Last-changedate](https://img.shields.io/badge/last%20change-2018--03--20-green.svg)](/commits/master)
-[![packageversion](https://img.shields.io/badge/Package%20version-0.1.1.9002-green.svg?style=flat-square)](commits/master)
-
+[![Last-changedate](https://img.shields.io/badge/last%20change-2018--12--20-green.svg)](/commits/master)
+[![packageversion](https://img.shields.io/badge/Package%20version-0.1.2.9000-green.svg?style=flat-square)](commits/master)
 [![Travis build
 status](https://travis-ci.org/mailund/tailr.svg?branch=master)](https://travis-ci.org/mailund/tailr)
 [![Appveyor build
@@ -19,15 +18,12 @@ status](https://ci.appveyor.com/api/projects/status/1d36yh8klursko82/branch/mast
 status](https://codecov.io/gh/mailund/tailr/branch/master/graph/badge.svg)](https://codecov.io/github/mailund/tailr?branch=master)
 [![Coverage
 status](http://coveralls.io/repos/github/mailund/tailr/badge.svg?branch=master)](https://coveralls.io/github/mailund/tailr?branch=master)
-
 [![CRAN
 status](http://www.r-pkg.org/badges/version/tailr)](https://cran.r-project.org/package=tailr)
 [![CRAN
 downloads](http://cranlogs.r-pkg.org/badges/grand-total/tailr)](https://cran.r-project.org/package=tailr)
 [![minimal R
 version](https://img.shields.io/badge/R-%E2%89%A53.2-blue.svg)](https://cran.r-project.org/)
-
------
 
 Recursive functions are the natural way to express iterations in a
 functional programming langauge, but in R, they can be significantly
@@ -60,8 +56,26 @@ devtools::install_github("mailund/tailr")
 
 ## Examples
 
-We can take a classical recursive function and write it in a
-tail-recursive form using an accumulator:
+Consider a classical recursive function, `factorial`:
+
+``` r
+factorial <- function(n) {
+    if (n <= 1) 1
+    else n * factorial(n - 1)
+}
+```
+
+(I know R already has a builtin factorial function, but please ignore
+that). This function will compute the factorial of `n`, but if `n` is
+too large, it will exceed the stack limit:
+
+``` r
+> factorial(3000)
+Error: C stack usage  7970184 is too close to the limit
+```
+
+A classical way out of this problem is to turn it into a tail-recursive
+function:
 
 ``` r
 factorial <- function(n, acc = 1) {
@@ -70,27 +84,43 @@ factorial <- function(n, acc = 1) {
 }
 ```
 
-We can then, automatically, translate that into a looping version:
+R doesn’t implement the tail-recursion optimisation, though, so it
+doesn’t help us.
+
+``` r
+> factorial(3000)
+Error: C stack usage  7970184 is too close to the limit
+```
+
+With `tailr` we can, automatically, translate a tail-recursive function
+into a looping one, essentially implementing the tail-recursion
+optimisation this way.
 
 ``` r
 tr_factorial <- tailr::loop_transform(factorial, byte_compile = FALSE)
-tr_factorial
-#> function(n, acc = 1) {
-#>     if (n <= 1) acc
-#>     else factorial(n - 1, acc * n)
-#> }
-
-tr_factorial(100)
-#> [1] 9.332622e+157
 ```
 
-I have disabled byte compilation to make running time comparisons fair;
-by default it is enabled. For a function as simple as `factorial`,
-though, byte compiling will not affect the running time in any
-substantial amount.
+I have disabled byte compilation to make running time comparisons fair
+below; by default it is enabled. For a function as simple as
+`factorial`, though, byte compiling will not affect the running time in
+any substantial amount.
 
-We can compare the running time with the recursive function and a
-version that is written using a loop:
+This version, because it looks instead of recurse, doesn’t have the
+stack limit problem:
+
+``` r
+tr_factorial(3000)
+#> [1] Inf
+```
+
+We get the result `Inf` because the number we compute is too large to
+represent on the computer, but that is not the point of the example. The
+point is that the recursion doesn’t get too deep for the stack because
+we avoid recursion alltogether.
+
+With something as simple as computing the factorial, it is easy to write
+a looping function by hand, and it will be much faster than both the
+(tail-)recursive and the transformed function:
 
 ``` r
 loop_factorial <- function(n) {
@@ -105,14 +135,14 @@ loop_factorial <- function(n) {
 
 n <- 1000
 bm <- microbenchmark::microbenchmark(factorial(n), 
-                                     loop_factorial(n), 
-                                     tr_factorial(n))
+                                     tr_factorial(n), 
+                                     loop_factorial(n))
 bm
 #> Unit: microseconds
 #>               expr     min       lq      mean   median       uq      max
-#>       factorial(n) 715.304 772.4265 1035.9802 863.2585 1179.665 6816.073
-#>  loop_factorial(n)  51.310  51.8860   96.7987  53.6600   60.598 3491.843
-#>    tr_factorial(n) 791.451 821.8215 1100.5864 907.5140 1166.180 2606.855
+#>       factorial(n) 699.833 790.4000 994.13872 856.2115 1076.836 5492.965
+#>    tr_factorial(n) 780.342 803.4845 939.39344 838.3140 1047.651 2804.756
+#>  loop_factorial(n)  57.173  59.7730  85.75384  60.6195   61.887 2359.777
 #>  neval
 #>    100
 #>    100
@@ -120,12 +150,10 @@ bm
 boxplot(bm)
 ```
 
-<img src="man/figures/README-unnamed-chunk-3-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-5-1.png" width="100%" />
 
-There is *some* overhead in using the automatically translated version
-over the hand-written, naturally, and for a simple function such as
-`factorial`, it is not hard to write the loop-variant instead of the
-recursive function.
+The transformed version runs in about the same time as the recursive
+one, but the looping function is much faster.
 
 However, consider a more complicated example. Using the `pmatch`
 package, we can create a linked list data structure as this:
@@ -140,64 +168,11 @@ recursive functions that matches different patterns of their input. A
 function for computing the length of a linked list can look like this:
 
 ``` r
-llength <- function(llist, acc = 0) {
-    cases(llist,
-          NIL -> acc,
-          CONS(car, cdr) -> llength(cdr, acc + 1))
-}
+llength <- case_func(acc = 0,
+   NIL -> acc,
+   CONS(car, cdr) -> llength(cdr, acc + 1)
+)
 ```
-
-It is reasonably simple to understand this function, whereas a looping
-version is somewhat more complicated. An initial attempt could look like
-this:
-
-``` r
-loop_llength <- function(llist) {
-    acc <- 0
-    repeat {
-        cases(llist,
-              NIL -> return(acc),
-              CONS(car, cdr) -> {
-                  acc <- acc + 1
-                  llist <- cdr
-              })
-    }
-}
-```
-
-This version will not function, however, since it tries to `return` from
-inside a call to `cases`, and `return` only works inside the immediate
-scope.
-
-Instead, we can use `callCC` to implement a non-local return like this:
-
-``` r
-loop_llength <- function(llist) {
-    callCC(function(escape) {
-        acc <- 0
-        repeat {
-            cases(llist,
-                  NIL -> escape(acc),
-                  CONS(car, cdr) -> {
-                      acc <<- acc + 1
-                      llist <<- cdr
-                  })
-        }    
-    })
-}
-```
-
-Notice that we have to use the `<<-` assignment operator here. This is
-for the same reason that we need a non-local return. The expression
-inside the call to `cases` is evaluated in a different environment than
-the local function environment, so to get to the actual variables we
-want to assign to, we need the non-local assignment operator.
-
-It is possible to avoid `cases` using other functions from the `pmatch`
-package, but the result is vastly more compliated since pattern matching
-and expressions that should be evaluated per case needs to handle
-scoping. We can automatically make such a function using `tailr`,
-however:
 
 ``` r
 tr_llength <- tailr::loop_transform(llength)
@@ -206,19 +181,54 @@ tr_llength <- tailr::loop_transform(llength)
 The function we generate is rather complicated
 
 ``` r
-tr_llength
-#> function(llist, acc = 0) {
-#>     cases(llist,
-#>           NIL -> acc,
-#>           CONS(car, cdr) -> llength(cdr, acc + 1))
-#> }
-#> <bytecode: 0x7fac8a3e9238>
+body(tr_llength)
+#> .Primitive("{")(.tailr_.match_expr <- .match_expr, .tailr_acc <- acc, 
+#>     callCC(function(escape) {
+#>         repeat {
+#>             .Primitive("{")(.match_expr <- .tailr_.match_expr, 
+#>                 acc <- .tailr_acc, if (is.na(.match_expr) && 
+#>                   attr(.match_expr, "constructor") == "NIL") 
+#>                   escape(acc)
+#>                 else if ({
+#>                   .cons <- attr(.match_expr, "constructor")
+#>                   !is.null(.cons) && .cons == "CONS"
+#>                 } && {
+#>                   car <- .match_expr$car
+#>                   TRUE
+#>                 } && {
+#>                   cdr <- .match_expr$cdr
+#>                   TRUE
+#>                 }) {
+#>                   .tailr_.match_expr <<- cdr
+#>                   .tailr_acc <<- acc + 1
+#>                 }
+#>                 else {
+#>                   escape(stop("None of the patterns match."))
+#>                 }, next)
+#>         }
+#>     }))
 ```
 
 but, then, it is not one we want to manually inspect in any case.
 
-The automatically generated function is complicated, but it actually
-outcompetes the hand-written loop version.
+It is not too hard to implement this function with a loop either, but it
+is not as simple as the recursive function:
+
+``` r
+is_nil <- case_func(NIL -> TRUE, otherwise -> FALSE)
+loop_llength <- function(llist) {
+    len <- 0
+    while (!is_nil(llist)) {
+        len <- len + 1
+        llist <- llist$cdr
+    }
+    len
+}
+```
+
+If we compare the running time for these three functions, the
+transformed function is faster than the recursive but not as fast as the
+iterative:
 
 ``` r
 make_llist <- function(n) {
@@ -230,53 +240,190 @@ make_llist <- function(n) {
 }
 test_llist <- make_llist(100)
 bm <- microbenchmark::microbenchmark(llength(test_llist),
-                                     loop_llength(test_llist),
-                                     tr_llength(test_llist))
+                                     tr_llength(test_llist),
+                                     loop_llength(test_llist))
 bm
-#> Unit: milliseconds
-#>                      expr      min       lq     mean   median       uq
-#>       llength(test_llist) 54.94337 65.40173 68.42609 67.61124 71.20118
-#>  loop_llength(test_llist) 59.18011 70.31971 75.76034 74.02095 78.67105
-#>    tr_llength(test_llist) 35.13879 43.11308 45.63485 45.09175 48.55855
-#>        max neval
-#>   99.00812   100
-#>  134.51344   100
-#>   60.88526   100
+#> Unit: microseconds
+#>                      expr     min      lq     mean   median       uq
+#>       llength(test_llist) 311.461 314.529 410.0324 318.8050 327.9455
+#>    tr_llength(test_llist) 422.970 426.982 481.7691 430.3400 458.4060
+#>  loop_llength(test_llist) 169.677 171.921 235.7967 173.4075 177.2230
+#>       max neval
+#>  5551.296   100
+#>  3257.986   100
+#>  5502.246   100
 boxplot(bm)
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-11-1.png" width="100%" />
 
-It is, of course, possible to write a faster hand-written function to
-deal with this case, but it will be about as complicated as the
-automatically generated function, and you don’t really want to write
-that by hand.
+**FIXME:** The main reason for this is that the running time is
+dominated by the cost of `pmatch`. If I manage to get that faster, the
+iterative function might end being much faster here as well.
 
-As you have no doubt noticed about `llength`, it is not in fact
-tail-recursive, from the look of it, since the final recursion is
-enclosed by a call to `cases`. The function is only tail-recursive
-because it can be translated into one by rewriting the `cases` function
-call to a sequence of `if`-statements. The `tailr` package doesn’t
-handle `cases` from `pmatch` by knowing about this package. Instead, it
-has a mechanism that lets you provide re-writing rules.
-
-If you set the attribute “tailr\_transform” on a function, and set this
-attribute to a function, then that function will be called when `tailr`
-sees the function, before it attempts any other processing. The
-attribute must be a function that maps an expression to another,
-re-written, expression. The one for `cases` looks like this:
+More examples:
 
 ``` r
-tailr_transform_call <- function(expr) {
-    stopifnot(rlang::call_name(expr) == "cases")
+llcontains <- case_func(x,
+    NIL -> FALSE,
+    CONS(car, cdr) -> if (car == x) TRUE else llcontains(cdr, x)
+)
 
-    args <- rlang::call_args(expr)
-    value <- args[[1]]
-    patterns <- args[-1]
-    eval(rlang::expr(cases_expr(!!value, !!!patterns)))
+tr_llcontains <- tailr::loop_transform(llcontains)
+
+loop_contains <- function(lst, x) {
+    while (!is_nil(lst)) {
+        if (x == lst$car) return(TRUE)
+        else lst <- lst$cdr
+    }
 }
-attr(cases, "tailr_transform") <- tailr_transform_call
+
+lst <- make_llist(100)
+bm <- microbenchmark::microbenchmark(llcontains(lst, 1001),
+                                     tr_llcontains(lst, 1001),
+                                     loop_contains(lst, 1001))
+bm
+#> Unit: microseconds
+#>                      expr     min       lq     mean   median       uq
+#>     llcontains(lst, 1001) 308.417 320.6750 461.6773 335.1845 376.4935
+#>  tr_llcontains(lst, 1001) 432.907 448.2985 509.1565 469.4505 504.8375
+#>  loop_contains(lst, 1001) 235.567 241.9755 306.6966 258.8265 286.5830
+#>       max neval
+#>  5073.269   100
+#>  2596.863   100
+#>  2548.667   100
+boxplot(bm)
 ```
 
-You can use this mechanism to support tail-recursion for
-non-tail-recursive functions that can be rewritten to be tail-recursive.
+<img src="man/figures/README-unnamed-chunk-12-1.png" width="100%" />
+
+``` r
+llrev <- pmatch::case_func(acc = NIL,
+    NIL -> acc,
+    CONS(car, cdr) -> llrev(cdr, CONS(car, acc))
+)
+
+bubble <- case_func(swapped = FALSE, acc = NIL,
+    CONS(first, CONS(second, rest)) -> 
+        if (first > second) bubble(CONS(first, rest), TRUE, CONS(second, acc))
+        else bubble(CONS(second, rest), swapped, CONS(first, acc)),
+    CONS(x, NIL) -> list(new_list = llrev(CONS(x, acc)), swapped = swapped)
+)
+
+bubble_sort <- function(lst) {
+    if (is_nil(lst)) return(lst)
+    bind[lst, swapped] <- bubble(lst)
+    while (swapped) {
+        bind[lst, swapped] <- bubble(lst)
+    }
+    lst
+}
+
+lst <- CONS(3, CONS(2, CONS(5, CONS(1, NIL))))
+bubble_sort(lst)
+#> CONS(car = 1, cdr = CONS(car = 2, cdr = CONS(car = 3, cdr = CONS(car = 5, cdr = NIL))))
+```
+
+``` r
+tr_llrev <- pmatch::case_func(acc = NIL,
+    NIL -> acc,
+    CONS(car, cdr) -> llrev(cdr, CONS(car, acc))
+)
+
+tr_llrev <- tailr::loop_transform(tr_llrev)
+
+tr_bubble <- case_func(swapped = FALSE, acc = NIL,
+    CONS(first, CONS(second, rest)) -> 
+        if (first > second) tr_bubble(CONS(first, rest), TRUE, CONS(second, acc))
+        else tr_bubble(CONS(second, rest), swapped, CONS(first, acc)),
+    CONS(x, NIL) -> list(new_list = tr_llrev(CONS(x, acc)), swapped = swapped)
+)
+tr_bubble <- tailr::loop_transform(tr_bubble)
+
+tr_bubble_sort <- function(lst) {
+    if (is_nil(lst)) return(lst)
+    bind[lst, swapped] <- tr_bubble(lst)
+    while (swapped) {
+        bind[lst, swapped] <- tr_bubble(lst)
+    }
+    lst
+}
+
+lst <- CONS(3, CONS(2, CONS(5, CONS(1, NIL))))
+tr_bubble_sort(lst)
+#> CONS(car = 1, cdr = CONS(car = 2, cdr = CONS(car = 3, cdr = CONS(car = 5, cdr = NIL))))
+```
+
+``` r
+loop_llrev <- function(lst) {
+    acc <- NIL
+    while (!is_nil(lst)) {
+        acc <- CONS(lst$car, acc)
+        lst <- lst$cdr
+    }
+    acc
+}
+loop_bubble <- function(lst, swapped = FALSE) {
+    acc <- NIL
+    repeat {
+        if (is_nil(lst$cdr)) 
+            return(list(new_list = loop_llrev(CONS(lst$car, acc)),
+                        swapped = swapped))
+        
+        first <- lst$car
+        second <- lst$cdr$car
+        rest <- lst$cdr$cdr
+        if (first > second) {
+            acc <- CONS(second, acc)
+            lst <- CONS(first, rest)
+            swapped <- TRUE
+        } else {
+            acc <- CONS(first, acc)
+            lst <- CONS(second, rest)
+        }
+    }
+}
+
+loop_bubble_sort <- function(lst) {
+    if (is_nil(lst)) return(lst)
+    bind[lst, swapped] <- loop_bubble(lst)
+    while (swapped) {
+        bind[lst, swapped] <- loop_bubble(lst)
+    }
+    lst
+}
+
+lst <- CONS(3, CONS(2, CONS(5, CONS(1, NIL))))
+loop_bubble_sort(lst)
+#> CONS(car = 1, cdr = CONS(car = 2, cdr = CONS(car = 3, cdr = CONS(car = 5, cdr = NIL))))
+```
+
+``` r
+lst <- make_llist(10)
+bm <- microbenchmark::microbenchmark(bubble_sort(lst),
+                                     tr_bubble_sort(lst),
+                                     loop_bubble(lst))
+bm
+#> Unit: microseconds
+#>                 expr      min       lq     mean    median       uq
+#>     bubble_sort(lst) 3625.430 3739.114 4294.959 3881.5525 4361.909
+#>  tr_bubble_sort(lst) 4056.978 4158.021 4550.006 4302.0615 4627.124
+#>     loop_bubble(lst)  118.545  127.785  135.504  130.1145  137.271
+#>        max neval
+#>  11338.354   100
+#>   7247.965   100
+#>    259.622   100
+boxplot(bm)
+```
+
+<img src="man/figures/README-unnamed-chunk-16-1.png" width="100%" />
+
+The module primarily solves the problem of exceeding the stack space.
+The transformed functions are not as fast as those we can code by hand
+using loops. It *should* be possible to improve on the running time of
+the transformed functions, however, with some program analysis… This
+analysis should be included in the time usage analysis, though, which
+will probably still come out saying that manually programmed looping
+versions are faster than transformed functions. Recursive functions can
+be a lot easier to read, though, than their corresponding looping
+versions, especially with pattern matching.
